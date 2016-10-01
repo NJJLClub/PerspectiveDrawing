@@ -515,8 +515,8 @@ Local menu:TMenuBar = TMenuBar.Create("MenuBar",0,0,SCREEN_WIDTH)
 menu.actionCallback = localCallback
 Local ml:TMenuList = menu.AddMenuList("File","File")
 Local mi:TMenuItem = ml.AddItem("FileOpen", "Open...")
-Local mi:TMenuItem = ml.AddItem("FileSave", "Save...")
-mi:TMenuItem = ml.AddItem("FileExit", "Exit")
+      mi:TMenuItem = ml.AddItem("FileSave", "Save...")
+      mi:TMenuItem = ml.AddItem("FileExit", "Exit")
 
 Function localCallback( mi:TMenuItem )
 	Select mi.name$
@@ -607,6 +607,7 @@ While Not (  AppTerminate() )
 			gameObject.drawBigCross( mouse_x, mouse_y )
 			
 			gameObject.snapgrid = M_NO_SNAP	' turn off grid snapping when in this mode
+			gameObject.wiremode = K_CONSTRAINT_XY
 	
 		EndIf
 		
@@ -784,6 +785,7 @@ While Not (  AppTerminate() )
 	
 	If MouseHit(2) Then
 		mode = M_START_LINE
+		gameObject.wiremode = K_CONSTRAINT_XY
 	ElseIf KeyHit(KEY_ESCAPE)
 		mode = M_START_LINE
 	EndIf
