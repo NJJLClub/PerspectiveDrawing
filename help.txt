@@ -1,0 +1,12 @@
+V - place a vanishing point down
+W - Toggle Wire Mode
+G - Toggle Grid Snapping On/Off
+DEL - go into delete mode to delete segments and vanishing points
+SPACE - Toggle vanishing point selections
+MB1 Click - Start/End Line Segment
+SHIFT - Hold this to draw along selected vanishing point line
+
+File -> Open...   to open a drawing
+File -> Save...   to save a drawing
+File -> Exit      to exit the program
+

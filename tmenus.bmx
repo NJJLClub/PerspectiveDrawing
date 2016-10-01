@@ -102,6 +102,11 @@ Type TMenuBar
 		Return ml
 		
 	End Method
+	
+	Method GetHeight:Float()
+		Return sh#
+	End Method
+	
 
 	Method DrawBar()
 		SetColor br,bg,bb
