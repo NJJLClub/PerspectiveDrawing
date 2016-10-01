@@ -9,6 +9,7 @@ my code left off at:  ctrl-z does undo ; going from non-snap to snap no longer r
 to be done:  
 
 o need to write the SHIFT snap to vanishing point code
+o vertical and horizontal mode
 o need to write SAVE code (you can use snipping tool for now)
 o need to create REDO code (low priority)
 o need to add directions at the beginning
@@ -65,7 +66,15 @@ Type vanishingPoint
 		Return(v)
 		
 	End Function
-	
+
+	Function getSelected:vanishingPoint()
+		For Local o:vanishingPoint = EachIn vanishingPoint.list
+			If ( o.selected ) Return o
+		Next
+		
+		Return Null
+				
+	End Function	
 	
 	Function getSelectedX:Float()
 		For Local o:vanishingPoint = EachIn vanishingPoint.list
@@ -122,6 +131,37 @@ Type vanishingPoint
 		
 	End Function
 	
+	Rem 
+		nearestEdge ; this will take your mouse point ux,uy and 
+		the starting click to determine the line-segment that 
+		represents the line between the starting point and the
+		vanishing point and then determines which of the many 
+		vanishing points your mouse is closest too and returns
+		that object.
+		
+	End Rem
+	
+	Function nearestEdge:vanishingPoint( ux:Float, uy:Float, sx:Float, sy:Float)
+
+		Local smallest:Float = 100000000
+		Local nearestObj:vanishingPoint = Null
+		
+		
+		For Local o:vanishingPoint = EachIn vanishingPoint.list
+			Local dist:Float = getPerpDistance:Float ( ux, uy, sx, sy, o.x, o.y )
+			If ( dist < smallest ) Then
+				smallest = dist
+				nearestObj = o
+			EndIf
+			
+		Next
+			
+		Return nearestObj
+
+	
+	End Function
+	
+	
 	
 	Function Count:Int()
 		Local counter:Int = 0
@@ -170,8 +210,30 @@ Type vanishingPoint
 		
 	End Function
 	
-	
+	Function selectPrev()
+		Local previous:vanishingPoint = Null
+		
+		For Local o:vanishingPoint = EachIn vanishingPoint.list
+			If ( o.selected ) Then
+				o.selected = False
+				Exit 
+			Else
+				previous = o
+			EndIf			
+			
+		Next
+		
+		If (  previous = Null  ) Then
+			Local o:vanishingPoint = vanishingPoint( vanishingPoint.list.Last() )
+			If ( o  ) Then o.selected = True
+		Else
+			previous.selected = True
+		EndIf
+		
+	End Function
+		
 	Method draw()
+		' draw anchor point of the vanishing point
 	
 		Local icon=1  ' 0=upside down V;  1= draw an X
 
@@ -181,6 +243,9 @@ Type vanishingPoint
         ' draw vanishing point
 
 		SetColor 0,0,255
+		
+		If ( selected ) SetColor 0,255,0
+		
 		Select icon
 			Case 0
 				DrawLine( x, y, x - 5, y + 5)
@@ -463,13 +528,57 @@ While Not (  AppTerminate() )
 		gameObject.snapgrid = Not gameObject.snapgrid ' toggle grid mode
 	EndIf
 	
-	If ( KeyDown(KEY_LSHIFT) ) Then
+	If ( KeyDown(KEY_LSHIFT) And vanishingPoint.Count()>0) Then
 		' snap to vanishing point  -- TBD
+		
 		
 		gameObject.drawX( mouse_x, mouse_y )
 		
 		' set mouse_x,y at intercept point between user mouse and nearest vanishing point
 		
+		Local vpoint:vanishingPoint = vanishingPoint.getSelected()
+		If ( vpoint ) Then
+			Local dx:Float = startPt.x - vpoint.x
+			Local dy:Float = startPt.y - vpoint.y
+			Local a:Float = ATan2( dy, dx )
+			Local xx0:Float, yy0:Float
+			Local xx1:Float, yy1:Float
+			Local radius:Float = 2000
+			Local x:Float = startPt.x
+			Local y:Float = startPt.y
+		
+			xx0 = x + Cos(a) * radius
+			yy0 = y + Sin(a) * radius
+			xx1 = x + Cos(a) * radius * -1
+			yy1 = y + Sin(a) * radius * -1
+			
+			Local location:GeomPoint =  getPerpPoint( mouse_x, mouse_y, xx0, yy0, xx1, yy1 )
+			mouse_x = location.x
+			mouse_y = location.y
+			
+			
+	Rem 
+	
+			'Print "nearest vanishing point is "+vpoint.x+","+vpoint.y
+			Local dx:Float = startPt.x - mouse_x
+			Local dy:Float = startPt.y - mouse_y
+			
+			SetColor 255,255,255
+			DrawText "dx: "+dx+"  dy: "+dy, 2, 40
+			
+			Local direction:Float = 1.0
+			Local d:Float = Sqr( dx^2 + dy^2)
+			
+			Local vdx:Float = vpoint.x - startPt.x
+			Local vdy:Float = vpoint.y - startPt.y
+			Local ang:Float = ATan2( vdy, vdx )
+			
+			mouse_x = startPt.x + Cos(ang) * d * direction
+			mouse_y = startPt.y + Sin(ang) * d * direction
+			
+	End Rem
+	
+		EndIf
 		
 	Else
 	
@@ -481,6 +590,12 @@ While Not (  AppTerminate() )
 
 	EndIf
 	 
+	If KeyHit(KEY_SPACE) Or KeyHit(KEY_RIGHT) Then
+		vanishingPoint.selectNext()
+	ElseIf KeyHit(KEY_LEFT) Then
+		vanishingPoint.selectPrev()
+	EndIf
+	
 
 
 	If KeyHit(KEY_Z) And ( KeyDown(KEY_LCONTROL) Or KeyDown(KEY_RCONTROL))  Then
@@ -533,14 +648,14 @@ While Not (  AppTerminate() )
 		ElseIf mode = M_TO_PREV_LINE Then
 		
 			If ( gameObject.snapgrid = M_SNAP_GRID ) Then
-				segmentObj.Create4(  startPt.x , startPt.y, snapX( MouseX()), snapY(MouseY()) )
+				segmentObj.Create4(  startPt.x , startPt.y, snapX(mouse_x), snapY( mouse_y) )
 			Else
-				segmentObj.Create4(  startPt.x , startPt.y, MouseX(), MouseY() )
+				segmentObj.Create4(  startPt.x , startPt.y, mouse_x, mouse_y )
 			EndIf
 			
 
-			rawPt.x = MouseX()
-			rawPt.y = MouseY()
+			rawPt.x = mouse_x
+			rawPt.y = mouse_y
 			gridPt.x =snapX( rawPt.x )
 			gridPt.y = snapY( rawPt.y )
 			startPt = rawPt
@@ -549,7 +664,7 @@ While Not (  AppTerminate() )
 			EndIf
 									
 		ElseIf mode = M_DELETE Then
-			gameObject.smartDeleteSegment( MouseX(), MouseY())
+			gameObject.smartDeleteSegment( mouse_x, mouse_y)
 			
 		ElseIf mode = M_MENU_PICK Then
 			mode = oldmode
@@ -561,16 +676,17 @@ While Not (  AppTerminate() )
 	EndIf
 	
 	If ( mode = M_TO_PREV_LINE ) Then
+
+		vanishingPoint.drawAllTo( startPt.x, startPt.y )
 	
 		SetColor 255,255,255
 		
 		If ( gameObject.snapgrid = M_SNAP_GRID ) Then
-			DrawLine startPt.x, startPt.y, snapX( MouseX() ),  snapY(MouseY())
+			DrawLine startPt.x, startPt.y, snapX( mouse_x),  snapY( mouse_y)
 		Else
-			DrawLine startPt.x, startPt.y, MouseX(), MouseY()
+			DrawLine startPt.x, startPt.y, mouse_x, mouse_y
 		EndIf
 		
-		vanishingPoint.drawAllTo( startPt.x, startPt.y )
 
 	EndIf
 	
