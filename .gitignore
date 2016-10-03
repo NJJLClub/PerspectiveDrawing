@@ -1,0 +1,10 @@
+# ignore blitz backup files; they end in .bak
+*.bmx.bak
+# ignore Vanishing Point Data files
+*.vpd
+# ignore the help.txt file
+help.txt
+# ignore executable files
+*.exe
+# ignore object files and intemediate .s files
+*.[os]

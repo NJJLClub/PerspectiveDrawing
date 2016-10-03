@@ -133,6 +133,17 @@ Type TMenuBar
 		
 	End Method
 	
+	Method isAMenuActive:Int()
+		Local isActive:Int = False
+	
+	    For Local ml:TMenuList = EachIn lMenuLists
+	        If ml.visible Then isActive = True
+		Next
+		
+		Return isActive
+		
+	End Method
+	
 	Method Pick:Int (mx#,my#)
 	
 		Local didpick:Int = 0

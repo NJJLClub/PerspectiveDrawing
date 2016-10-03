@@ -1,6 +1,7 @@
 Rem
 
 	Label object - draws text within a rect area
+	Button object - draws a label and adds an activate button
 	
 End Rem
 
@@ -31,23 +32,23 @@ Type tLabel
 		name$ = uname$
 		label$ = ulabel$
 		margin = 2
-		outline = 1
+		outline = 2
 		
 		fg = New RGB
 		bg = New RGB
 		ol = New RGB
 		
-		ol.r = 255
+		ol.r = 0
 		ol.g = 0
 		ol.b = 0
 		
-		fg.r = 255
-		fg.g = 255
-		fg.b = 255
+		fg.r = 0
+		fg.g = 0
+		fg.b = 0
 		
-		bg.r = 0
-		bg.g = 0
-		bg.b = 255
+		bg.r = 200
+		bg.g = 200
+		bg.b = 200
 		
 		Self.SetLabel( ulabel$ )
 		
@@ -56,8 +57,8 @@ Type tLabel
 	Method SetLabel( ulabel$ )
 		
 		label$ = ulabel$
-		w = TextWidth(label$)  + margin*2 + outline
-		h = TextHeight(label$) + margin*2 + outline
+		w = TextWidth(label$)
+		h = TextHeight(label$)
 		
 		
 	End Method
@@ -67,16 +68,16 @@ Type tLabel
 	
 		If outline > 0 Then 
 			CSetColor ol
-			DrawRect x,y,w+margin*2+outline*2,h+margin*2+outline*2
+			DrawRect x - outline - margin, y - outline - margin,w + outline*2 + margin*2,h + outline*2 + margin*2
 		EndIf
 
 		' draw background + margin
 		CSetColor bg
-		DrawRect x+outline,y+outline,w+margin*2,h+margin*2
+		DrawRect x - margin,y-margin,w+margin*2,h+margin*2
 		
 		' draw text
 		CSetColor fg
-		DrawText label$,x+outline+margin,y+outline+margin
+		DrawText label$,x,y
 		
 	End Method
 	

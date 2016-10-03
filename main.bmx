@@ -2,8 +2,18 @@ Rem
 
 PERSEPECTIVE DRAWING TOOL
 
-
 DATE:  9/28/2016 12:52AM
+
+AUTHOR: James Laderoute (JJL)
+
+HISTORY:
+
+001		09/28/16		JJL
+		Initial Creation
+		
+002		10/02/16		JJL
+		Gravity snap points added
+
 
 TASKS:
 
@@ -36,13 +46,11 @@ Const OBJECT_WIDTH=10, OBJECT_HEIGHT=10
 
 Const K_SNAP=20
 
-Const M_START_LINE=0, M_TO_PREV_LINE=1, M_DELETE=2,  M_MENU_PICK=3
+Const M_START_LINE=0, M_END_LINE=1, M_DELETE=2,  M_MENU_PICK=3
 Const M_NO_SNAP=False, M_SNAP_GRID=True
 
 Const K_CONSTRAINT_X=1, K_CONSTRAINT_Y=2, K_CONSTRAINT_XY=3
-
-
-
+Const K_DIAGONALS=1, K_CONSTRAIN=2
 Global mode:Int = M_START_LINE
 
 
@@ -52,8 +60,13 @@ Type coord
 End Type
 
 Global startPt:coord = New coord;
+Global onlinePt:coord = New coord;
 Global rawPt:coord = New coord;
 Global gridPt:coord = New coord;
+Global nearPt:coord = New coord
+Global GmouseNearEndPoint = False
+Global GonLinePoint = False
+
 
 Type vanishingPoint
 	Global list:TList = New TList
@@ -175,7 +188,20 @@ Type vanishingPoint
 		
 		Return counter
 	End Function
-
+	
+	Function removeAll()
+		list.clear()
+	End Function
+	
+	Function write( fid:TStream )
+	
+		For Local obj:vanishingPoint = EachIn list
+			WriteLine fid,"V "+obj.x+" "+obj.y
+		Next
+		
+	End Function
+	
+	
 	Function remove(  obj:vanishingPoint )
 		ListRemove( list, obj )
 	End Function
@@ -259,9 +285,7 @@ Type vanishingPoint
 				DrawLine( x+5, y-5, x-5, y+5)
 				
 		End Select
-		
-		
-		'SetLineWidth 1.0
+
 		
 		
 	End Method
@@ -304,6 +328,14 @@ Type segmentObj
 		
 	End Function
 	
+	Function write( fid:TStream )
+	
+		For Local obj:segmentObj = EachIn list
+			WriteLine fid,"L "+obj.x0+" "+obj.y0+" "+obj.x1+" "+obj.y1
+		Next
+		
+	End Function
+	
 	
 	Function nearestLineSegment:segmentObj( ux:Float, uy:Float )
 		
@@ -326,6 +358,13 @@ Type segmentObj
 		Return  nearObj
 				
 	End Function
+	
+	Function removeAll()
+	
+		list.Clear()
+		
+	End Function
+	
 	
 	Function remove(  obj:segmentObj)
 		ListRemove( list, obj )
@@ -380,7 +419,9 @@ End Type
 Type gameObject
 	Global showDirections = True 				' flag to show directions on screen		
 	Global snapgrid = M_NO_SNAP					' snap to grid or not (boolean)
-	Global wiremode = K_CONSTRAINT_XY			' start off with freely drawing lines anywhere
+	Global constraint = K_CONSTRAINT_XY			' start off with freely drawing lines anywhere
+	Global linemode = K_DIAGONALS				' or K_CONSTRAIN
+	Global filename$ = "unnamed.vpd"
 
 	Function drawBigCross( x:Float, y:Float)
 		Local size:Int = 2000
@@ -417,9 +458,68 @@ Type gameObject
 	'   Save the drawing to a file
 	'-
 	Function save()
-		Local filename$ = "unnamed.txt"
+		If ( filename$ = "" ) Then Return
 		
-		'' TBD
+		Local fid:TStream = WriteFile( filename$  )
+		If Not fid RuntimeError "could not create file "+filename$
+
+        SetWindowTitle( filename$ )
+		
+		WriteLine fid, "# Perspective Drawing File"
+		WriteLine fid, "#"
+		
+		segmentObj.write( fid )
+		vanishingPoint.write( fid )
+		
+				
+		If ( fid ) Then CloseStream( fid )
+
+	End Function
+	
+	Function read()
+		If ( filename$ = "" ) Then Return
+        SetWindowTitle( filename$ )
+		
+		Local line:String
+		Local x0#, y0#, x1#, y1#
+		Local fid:TStream = ReadFile( filename$ )
+		Local first:vanishingPoint = Null 
+		
+		
+		If ( fid ) Then
+			segmentObj.removeAll()
+			vanishingPoint.removeAll()
+		EndIf
+		
+		While Not Eof(fid)
+			Local line$ = ReadLine(fid)
+			'L x0 y0 x1 y1
+			 Local parts$[] = line.split(" ")
+			Select parts$[0]
+				Case "L"
+					x0# = Float(parts$[1])
+					y0# = Float(parts$[2])
+					x1# = Float(parts$[3])
+					y1# = Float(parts$[4])
+					
+					Local s:segmentObj = segmentObj.Create4( x0#, y0#, x1#, y1#)
+					
+				Case "V"
+					x0# = Float(parts$[1])
+					y0# = Float(parts$[2])
+					Local v:vanishingPoint = vanishingPoint.Create( x0#, y0# )
+					v.selected = False
+					If ( first = Null ) Then first = v
+					
+					
+			End Select
+			
+			
+		Wend
+		
+		If ( first ) Then first.selected = True
+		
+		
 		
 	End Function
 	
@@ -427,13 +527,7 @@ Type gameObject
 		
 	Function drawGrid()
 	
-		If ( snapgrid ) Then
-			SetColor 30,30,30
-		Else
-			SetColor 0,0,30
-		EndIf
-		
-		
+		SetColor 30,30,30
 	
 		For Local i=0 To SCREEN_WIDTH Step K_SNAP
 			DrawLine i,0,i,SCREEN_HEIGHT
@@ -442,14 +536,12 @@ Type gameObject
 			DrawLine 0,i,SCREEN_WIDTH,i
 		Next
 		
-	
-	
 	End Function
 	
 	
 	Function drawDirections()
 	
-		Local img1:TImage = LoadImage("directions.png")
+		Local img1:TImage = LoadImage("media/directions.jpg")
 		If ( img1 ) Then
 			DrawImage( img1, 0, 0 )
 		Else
@@ -498,9 +590,9 @@ Rem
 EndRem
 
 
-AppTitle$ = "PERSPECTIVE DRAWING"
+AppTitle$ = "PERSPECTIVE DRAWING: unnamed.vpd"
 Graphics SCREEN_WIDTH,SCREEN_HEIGHT,DEPTH  ' this sets the size of the graphics window
-HideMouse 
+ 
 SetMaskColor 0,0,0	' which color we will use for our mask layer (transparent layer)
 SeedRnd MilliSecs()
 SetBlend MASKBLEND
@@ -515,21 +607,55 @@ Local menu:TMenuBar = TMenuBar.Create("MenuBar",0,0,SCREEN_WIDTH)
 menu.actionCallback = localCallback
 Local ml:TMenuList = menu.AddMenuList("File","File")
 Local mi:TMenuItem = ml.AddItem("FileOpen", "Open...")
-      mi:TMenuItem = ml.AddItem("FileSave", "Save...")
+      mi:TMenuItem = ml.AddItem("FileSave", "Save")
+      mi:TMenuItem = ml.AddItem("FileSaveAs", "Save As...")
       mi:TMenuItem = ml.AddItem("FileExit", "Exit")
 
 Function localCallback( mi:TMenuItem )
 	Select mi.name$
 		Case "FileExit"
+			gameObject.save()
 			End
+			
 		Case "FileOpen"
-			End
+			Local filter$ = "Vansishing Point Files:vpd,txt"
+			gameObject.filename$ = RequestFile( "Select vpd file to open", filter$ )		
+			gameObject.read()
+			
 		Case "FileSave"
+			If ( gameObject.filename$ = "" ) Then
+				Local filter$ = "Vansishing Point Files:vpd,txt"
+			    gameObject.filename$ = RequestFile( "Select vpd file to save", filter$, True )			
+			EndIf
+			
 			gameObject.save()
 			
+		Case "FileSaveAs"
+
+			Local filter$ = "Vansishing Point Files:vpd,txt"
+			gameObject.filename$ = RequestFile( "Select vpd file to save", filter$, True )					
+			gameObject.save()
 	End Select
+	
 End Function
 		
+Type mainFlow Extends tFlow
+	Method Activate( label$, udata$)
+		Select label$
+			Case "Start"
+				gameObject.showDirections = False
+				HideMouse
+		End Select
+	End Method
+End Type
+
+		
+' Create a START button to begin the application
+Global startBtn:tButton = tButton.Create( "Start", "Start", SCREEN_WIDTH/2, SCREEN_HEIGHT - 50)
+
+startBtn.flow = New mainFlow
+
+
 
 Rem
 	This is the main loop that does all the work and interactions with the user.
@@ -548,12 +674,20 @@ While Not (  AppTerminate() )
 	'
 	If gameObject.showDirections Then
 	
+		SetColor 255,255,255
+		
+		If ( MouseHit(1) ) Then startBtn.Update(1)
+	
 		gameObject.drawDirections()
+		
+		startBtn.Draw()  ' we have to draw the button last or else the directions screen would cover this button
+			
 		Flip
 		
 	
 		If KeyHit(KEY_SPACE) Then
 			gameObject.showDirections = False
+			HideMouse
 		EndIf
 		
 		Continue
@@ -561,22 +695,62 @@ While Not (  AppTerminate() )
 
 	gameObject.drawGrid()	  ' We draw the grid first so it does not cover any other graphical elements		
 	
+	Rem
+		Now get the current coordinate of the user's mouse
+		
+		And setup rawPt , gridPt and nearPt
+		
+	EndRem
+	
 	Local mouse_x = MouseX()  ' Determine where the user's mouse is on the screen
 	Local mouse_y = MouseY()
 	
+	rawPt.x = mouse_x			' rawPt is the actual mouse location
+	rawPt.y = mouse_y
+	
+	gridPt.x = snapX( rawPt.x  )		' gridPt is the raw point snapped to our grid system
+	gridPt.y = snapY( rawPt.y )
+			
+
+	Local s1:segmentObj = segmentObj.nearestLineSegment( mouse_x, mouse_y )
+	GmouseNearEndPoint = False
+	
+	If ( s1 ) Then
+		If ( isNear( rawPt.x, rawPt.y, s1.x0#, s1.y0# , 5.0 ) ) Then
+			nearPt.x = s1.x0#
+			nearPt.y = s1.y0#
+			GmouseNearEndPoint = True
+			
+		ElseIf isNear( rawPt.x, rawPt.y, s1.x1#, s1.y1#, 5.0)
+			nearPt.x = s1.x1#
+			nearPt.y = s1.y1#
+			GmouseNearEndPoint = True
+		EndIf
+		
+	EndIf
+	
+	If ( GmouseNearEndPoint And KeyDown( KEY_Z) ) Then 
+		GmouseNearEndPoint = False
+	EndIf
+	
+	
+		
 	If ( KeyHit( KEY_G ) ) Then
 		gameObject.snapgrid = Not gameObject.snapgrid ' toggle grid mode
 	EndIf
-	
+
+	GonLinePoint = False
+
 	'+
 	'  We allow the user to draw directly along the line from his
 	'  first click point to the selected vanishing point. The user
 	'  can change the selected vanishing point with keybindings as
 	'  described in the help section.
 	'-
-	If ( KeyDown(KEY_LSHIFT) And vanishingPoint.Count()>0) Then
+	
+	If ( mode=M_END_LINE And  KeyDown(KEY_LSHIFT) And vanishingPoint.Count()>0) Then
 		
-		gameObject.drawx( mouse_x, mouse_y ) ' draw an X where the current mouse is positioned - it's helpful feedback to the user
+		gameObject.drawX( rawPt.x, rawPt.y ) ' draw an X where the current mouse is positioned - it's helpful feedback to the user
 		
 		' set mouse_x,y at intercept point between user mouse and nearest vanishing point
 		
@@ -601,25 +775,49 @@ While Not (  AppTerminate() )
 			' Now we get the perpendicular intersection point of the vanishing line and use that
 			
 			Local location:GeomPoint =  getPerpPoint( mouse_x, mouse_y, xx0, yy0, xx1, yy1 )
-			mouse_x = location.x
-			mouse_y = location.y
 
-			gameObject.drawBigCross( mouse_x, mouse_y )
+			onlinePt.x = location.x
+			onlinePt.y = location.y
+			
+			'mouse_x = location.x
+			'mouse_y = location.y
+			
+			GonLinePoint = True
+			GmouseNearEndPoint = False ' online over-rules nearest endpoint
+
+			gameObject.drawBigCross( onlinePt.x, onlinePt.y )
 			
 			gameObject.snapgrid = M_NO_SNAP	' turn off grid snapping when in this mode
-			gameObject.wiremode = K_CONSTRAINT_XY
+			gameObject.constraint = K_CONSTRAINT_XY
 	
 		EndIf
 		
 	Else
 	
-		If ( gameObject.snapgrid = M_SNAP_GRID ) Then
-			mouse_x = snapX( mouse_x )
-			mouse_y = snapY( mouse_y )
-		EndIf
 		
 
 	EndIf
+
+	'+
+	'   Toggle various wire modes
+	'-
+		
+	If KeyHit(KEY_S) Then
+	
+		If ( mode = M_END_LINE ) Then 
+		
+			Select gameObject.linemode
+				Case K_CONSTRAIN
+					gameObject.linemode =  K_DIAGONALS
+				Case K_DIAGONALS
+					gameObject.linemode = K_CONSTRAIN
+			End Select
+		
+		EndIf
+		
+	EndIf
+
+
 	 
 	'+
 	'  Allow the user to traverse thru all the vanishing points for choosing the selection
@@ -628,6 +826,11 @@ While Not (  AppTerminate() )
 		vanishingPoint.selectNext()
 	ElseIf KeyHit(KEY_LEFT) Then
 		vanishingPoint.selectPrev()
+	EndIf
+
+	
+	If KeyHit(KEY_D) Then
+		mode = M_DELETE
 	EndIf
 	
 
@@ -641,7 +844,8 @@ While Not (  AppTerminate() )
 		
 		prevPt = segmentObj.undo()
 		If ( prevPt ) Then
-			startPt = prevPt
+			startPt.x = prevPt.x
+			startPt.y = prevPt.y
 		Else			
 			mode = M_START_LINE  ' when there are no more previous segments, then go back into START LINE mode
 		EndIf
@@ -649,19 +853,25 @@ While Not (  AppTerminate() )
 		
 	EndIf
 
-	
-	If ( mode = M_START_LINE ) Then
+	'+
+	'  You can only drop down a vanishing point marker while in the START LINE mode
+	'-
+	If  mode=M_START_LINE And KeyHit(KEY_V) Then
+		vanishingPoint.deselect()  ' de-select the currently selected point
+		Local usePt:coord = New coord
+		
 
-		'+
-		'  You can only drop down a vanishing point marker while in the START LINE mode
-		'-
-		If KeyHit(KEY_V) Then
-			vanishingPoint.deselect()  ' de-select the currently selected point 
-			Local vp:vanishingPoint = vanishingPoint.Create( mouse_x, mouse_y ) ' creating a new point also selects it
-		EndIf
+		usePt.x = rawPt.x
+		usePt.y = rawPt.y
 
+		If ( gameObject.snapgrid = M_SNAP_GRID ) 
+			usePt.x = gridPt.x
+			usePt.y = gridPt.y
+		EndIf	
+				 
+		Local vp:vanishingPoint = vanishingPoint.Create( usePt.x, usePt.y ) ' creating a new point also selects it
 	EndIf
-	
+
 	'+
 	'  did the user CLICK his MB1 mouse button? If so then do some action based on
 	'  which command the user is in.
@@ -671,10 +881,11 @@ While Not (  AppTerminate() )
 
 		Local oldmode = mode
 
-	    MENU.Pick(MouseX(), MouseY() )  ' see if the user has clicked in the MENU BAR area or on any drop-down menus from the menu bar
+	    Local didpick = MENU.Pick( rawPt.x, rawPt.y )  ' see if the user has clicked in the MENU BAR area or on any drop-down menus from the menu bar
+	
 	
 		' since we have a menubar present ; we need to change mode to menu pick if the mouseY < menubar height
-		If ( MouseY() < MENU.getHeight() ) Then 
+		If ( ( rawPt.y < MENU.getHeight() ) Or didpick Or MENU.isAMenuActive()  ) Then 
 			'+
 			'  by switching to some unhandled mode (ie. M_MENU_PICK) we can bypass any action
 			'  that would normally take place due to a mouse click operation
@@ -684,46 +895,61 @@ While Not (  AppTerminate() )
 	
 		Select mode
 			Case M_START_LINE
-				rawPt.x = MouseX()
-				rawPt.y = MouseY()
-				gridPt.x =snapX( rawPt.x )
-				gridPt.y = snapY( rawPt.y )
-				startPt = rawPt
+			
+				startPt.x = rawPt.x
+				startPt.y = rawPt.y
 				
 				If ( gameObject.snapgrid = M_SNAP_GRID ) Then
-					startPt = gridPt
-				EndIf
-								
-				mode = M_TO_PREV_LINE
-				
-			Case M_TO_PREV_LINE
-
-				If ( gameObject.wiremode = K_CONSTRAINT_X ) Then
-					mouse_y = startPt.y
-				ElseIf ( gameObject.wiremode = K_CONSTRAINT_Y ) Then
-					mouse_x = startPt.x
-				EndIf
-
-
-				If ( gameObject.snapgrid = M_SNAP_GRID ) Then
-					segmentObj.Create4(  startPt.x , startPt.y, snapX(mouse_x), snapY( mouse_y) )
-				Else
-					segmentObj.Create4(  startPt.x , startPt.y, mouse_x, mouse_y )
-				EndIf
-
-				
-	
-				rawPt.x = mouse_x
-				rawPt.y = mouse_y
-				gridPt.x =snapX( rawPt.x )
-				gridPt.y = snapY( rawPt.y )
-				startPt = rawPt
-				If ( gameObject.snapgrid = M_SNAP_GRID ) Then
-					startPt = gridPt
+					startPt.x = gridPt.x
+					startPt.y = gridPt.y
 				EndIf
 			
+				If ( GmouseNearEndPoint ) Then
+					startPt.x = nearPt.x
+					startPt.y = nearPt.y
+				EndIf
+									
+				mode = M_END_LINE
+				
+			Case M_END_LINE
+
+				Local endPt:coord = New coord
+
+				If ( gameObject.snapgrid = M_SNAP_GRID ) 
+					endPt.x = gridPt.x
+					endPt.y = gridPt.y
+				Else
+					endPt.x = rawPt.x
+					endPt.y = rawPt.y
+				EndIf
+
+				If ( GmouseNearEndPoint   )
+					endPt.x = nearPt.x
+					endPt.y = nearPt.y
+				ElseIf ( gameObject.linemode = K_CONSTRAIN )
+					If Abs( endPt.x - startPt.x ) > Abs( endPt.y - startPt.y) Then
+						gameObject.constraint = K_CONSTRAINT_X
+						endPt.y = startPt.y
+					Else
+						gameObject.constraint = K_CONSTRAINT_Y
+						endPt.x = startPt.x
+					EndIf
+					
+				EndIf				
+		
+				If ( GonLinePoint ) Then
+					endPt.x = onlinePt.x
+					endPt.y = onlinePt.y
+				EndIf								
+	
+				segmentObj.Create4(  startPt.x , startPt.y, endPt.x , endPt.y  )
+
+				startPt.x = endPt.x
+				startPt.y = endPt.y
+	
+			
 			Case M_DELETE
-				gameObject.smartDeleteSegment( mouse_x, mouse_y)		
+				gameObject.smartDeleteSegment(  rawPt.x, rawPt.y )		
 				
 			Case M_MENU_PICK 
 				mode = oldmode  ' restore command mode to what it was before MENU took it over
@@ -735,59 +961,62 @@ While Not (  AppTerminate() )
 		
 	EndIf
 	
-	If ( mode = M_TO_PREV_LINE ) Then
-	
-		SetLineWidth 1.0
-		
-		If ( gameObject.wiremode = K_CONSTRAINT_X ) Then
-			mouse_y = startPt.y
-		ElseIf ( gameObject.wiremode = K_CONSTRAINT_Y ) Then
-			mouse_x = startPt.x
-		EndIf
-		
-		gameObject.drawBigCross( mouse_x, mouse_y)
-
-		vanishingPoint.drawAllTo( startPt.x, startPt.y )
-	
-		SetColor 255,255,255
-		
-		If ( gameObject.snapgrid = M_SNAP_GRID ) Then
-			DrawLine startPt.x, startPt.y, snapX( mouse_x),  snapY( mouse_y)
-		Else
-			DrawLine startPt.x, startPt.y, mouse_x, mouse_y
-		EndIf
-		
-
-	EndIf
-
 	'+
-	'   Toggle various wire modes
+	'   Now we are in a mode where the user has already placed down his first
+	'	coordinate of a line segment and possibly others. We want to draw the
+	'   dynamic line from the startPt coordinate to the current modified coordinate.
+	'   Modified based on gridSnap mode, or nearest point or constraint mode
 	'-
+	
+	
+	If ( mode = M_END_LINE And ( rawPt.y > MENU.getHeight()  ) And ( Not MENU.isAMenuActive() )   ) Then
+
+		Local endPt:coord = New coord
 		
-	If KeyHit(KEY_W) Then
-	
-		Select gameObject.wiremode
-			Case K_CONSTRAINT_X
-				gameObject.wiremode =  K_CONSTRAINT_Y
-			Case K_CONSTRAINT_Y
-				gameObject.wiremode = K_CONSTRAINT_XY
-			Case K_CONSTRAINT_XY
-				gameObject.wiremode = K_CONSTRAINT_X
-		End Select
+		If ( gameObject.snapgrid = M_SNAP_GRID ) 
+			endPt.x = gridPt.x
+			endPt.y = gridPt.y
+		Else
+			endPt.x = rawPt.x
+			endPt.y = rawPt.y
+		EndIf
 		
+		If ( GmouseNearEndPoint   )
+			endPt.x = nearPt.x
+			endPt.y = nearPt.y
+		ElseIf ( gameObject.linemode = K_CONSTRAIN )
+			If Abs( endPt.x - startPt.x ) > Abs( endPt.y - startPt.y) Then
+				gameObject.constraint = K_CONSTRAINT_X
+				endPt.y = startPt.y
+			Else
+				gameObject.constraint = K_CONSTRAINT_Y
+				endPt.x = startPt.x
+			EndIf
+			
+		EndIf	
+
+		If ( GonLinePoint ) Then
+			endPt.x = onlinePt.x
+			endPt.y = onlinePt.y
+		EndIf
+				
+		gameObject.drawBigCross( endPt.x, endPt.y )
+		gameObject.drawX( rawPt.x, rawPt.y )
+
+		vanishingPoint.drawAllTo( startPt.x, startPt.y ) ' show all the vanishing lines available
+	
+		SetColor 255,255,255		
+
+		DrawLine startPt.x, startPt.y, endPt.x, endPt.y
+
 	EndIf
+
 	
 	
-	If KeyHit(KEY_DELETE) Then
-		mode = M_DELETE
-	EndIf
-	
-	
-	If MouseHit(2) Then
+	If MouseHit(2) Or KeyHit(KEY_ESCAPE) Then
 		mode = M_START_LINE
-		gameObject.wiremode = K_CONSTRAINT_XY
-	ElseIf KeyHit(KEY_ESCAPE)
-		mode = M_START_LINE
+		gameObject.constraint = K_CONSTRAINT_XY
+		gameObject.linemode = K_DIAGONALS
 	EndIf
 	
 		
@@ -797,18 +1026,39 @@ While Not (  AppTerminate() )
 	
 	
 	' draw mouse cursor to indicate mode of operation
-		
-	SetLineWidth 4.0
+
 	If ( mode = M_DELETE ) Then
-		gameObject.drawDeleteCursor( mouse_x, mouse_y)
-
+		gameObject.drawDeleteCursor( rawPt.x, rawPt.y)
 	ElseIf ( mode = M_START_LINE )
-		gameObject.drawXcursor( mouse_x, mouse_y)
-	ElseIf ( mode = M_TO_PREV_LINE )
-
+	
+		Local endPt:coord = New coord
+		
+		If ( gameObject.snapgrid = M_SNAP_GRID ) 
+			endPt.x = gridPt.x
+			endPt.y = gridPt.y
+		Else
+			endPt.x = rawPt.x
+			endPt.y = rawPt.y
+		EndIf
+		
+		If ( GmouseNearEndPoint   )
+			endPt.x = nearPt.x
+			endPt.y = nearPt.y
+		EndIf
+		
+		
+		gameObject.drawXcursor( endPt.x, endPt.y )
+		
+	ElseIf ( mode = M_END_LINE )
+		' draw no cursor
 	EndIf
 	
-	SetLineWidth 1.0
+	If (  rawPt.y <= MENU.getHeight() Or MENU.isAMenuActive() )
+		ShowMouse
+	Else
+		HideMouse
+	EndIf
+	
 	
 	
 	Flip 
@@ -850,6 +1100,29 @@ Function snapY:Float( y:Float )
 End Function
 
 
+Function SetWindowTitle( title:String)
+	Extern "Win32"
+		Function SetWindowTextW:Int( handle:Int, text$w)
+	EndExtern
+	Local hwnd:Int = GetBlitzmaxWindow()
+	If hwnd Then
+		AppTitle = title
+		SetWindowTextW( hwnd, title)	
+	EndIf
+EndFunction
 
+Function GetBlitzmaxWindow:Int()
+?Win32
+	Extern "Win32"
+		Function FindWindowW:Int( classname$w, windowtitle$w)	
+	EndExtern
+	Local handle:Int
+	handle = FindWindowW( "BBDX9Device Window Class", AppTitle)			' D3D9Max2D
+	If Not handle Then handle = FindWindowW( "BlitzMax GLGraphics", AppTitle)	' GLMax2D
+	If Not handle Then handle = FindWindowW( "BBDX7Device Window Class", AppTitle)	' D3D7Max2D
+	If Not handle Then handle  = FindWindowW( "BLITZMAX_WINDOW_CLASS", AppTitle)	' MaxGUI
+	Return handle
+?
+EndFunction
 
 
